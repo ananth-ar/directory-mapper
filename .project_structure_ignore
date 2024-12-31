@@ -1,1 +1,4 @@
-hr/fgf/**.txt
+hr/fgf/
+main.go
+temp/gg.go
+!samp.go

@@ -30,6 +30,10 @@ type TreeNode struct {
 	children []*TreeNode
 }
 
+func (p Pattern) String() string {
+    return fmt.Sprintf("{original:%s, isNegation:%v, isDir:%v}", p.original, p.isNegation, p.isDir)
+}
+
 // NewPatternList creates a new pattern list from a file
 func NewPatternList(filename, basePath string) (*PatternList, error) {
 	pl := &PatternList{
@@ -62,7 +66,7 @@ func NewPatternList(filename, basePath string) (*PatternList, error) {
 			return nil, fmt.Errorf("error adding pattern %s: %v", pattern, err)
 		}
 	}
-
+    // fmt.Printf("%+v\n", pl.patterns) 
 	return pl, scanner.Err()
 }
 
@@ -86,17 +90,17 @@ func (pl *PatternList) AddPattern(pattern string) error {
 
 	// Clean and split pattern
 	pattern = filepath.Clean(pattern)
-	if filepath.IsAbs(pattern) {
-		rel, err := filepath.Rel(pl.basePath, pattern)
-		if err != nil {
-			return fmt.Errorf("error converting absolute path to relative: %v", err)
-		}
-		pattern = rel
-	}
+	// if filepath.IsAbs(pattern) {
+	// 	rel, err := filepath.Rel(pl.basePath, pattern)
+	// 	if err != nil {
+	// 		return fmt.Errorf("error converting absolute path to relative: %v", err)
+	// 	}
+	// 	pattern = rel
+	// }
 
 	// Convert pattern to segments
-	p.segments = splitPattern(pattern)
-	p.isExact = !containsWildcard(pattern)
+	p.segments = splitPattern(pattern) // hr\fgf\**.txt => [hr fgf **.txt]
+	p.isExact = !strings.Contains(pattern, "*") || strings.Contains(pattern, "?")
 
 	pl.patterns = append(pl.patterns, p)
 	return nil
@@ -118,11 +122,6 @@ func splitPattern(pattern string) []string {
 	return segments
 }
 
-// containsWildcard checks if a pattern contains any wildcard characters
-func containsWildcard(pattern string) bool {
-	return strings.Contains(pattern, "*") || strings.Contains(pattern, "?")
-}
-
 // Matches checks if a path matches any pattern in the list
 func (pl *PatternList) Matches(path string) bool {
 	if len(pl.patterns) == 0 {
@@ -139,7 +138,8 @@ func (pl *PatternList) Matches(path string) bool {
 		}
 	}
 	relPath = filepath.ToSlash(filepath.Clean(relPath))
-
+    // now=> temp/gg.go
+	
 	// Get path info
 	info, err := os.Stat(path)
 	if err != nil {
@@ -149,8 +149,8 @@ func (pl *PatternList) Matches(path string) bool {
 
 	// Check each pattern in order
 	result := false
-	for _, p := range pl.patterns {
-		if p.matches(relPath, isDir) {
+	for _, p := range pl.patterns { 
+		if p.matches(relPath, isDir) {// to be changed
 			result = !p.isNegation
 		}
 	}
