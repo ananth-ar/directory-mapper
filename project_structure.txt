@@ -1,0 +1,4 @@
+--- Project Structure ---
+[dirMapper]
+  go.mod
+  main.go
