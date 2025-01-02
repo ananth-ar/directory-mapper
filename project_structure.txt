@@ -1,18 +1,32 @@
---- Project Structure ---
+<Project_Structure>
 [dirMapper]
     ├── go.mod
     ├── [hr]
+    │   ├── [fgf]
+    │   │   ├── gggf.txt
+    │   │   └── samp.go
     │   └── h.txt
     └── [temp]
-
---- File Contents ---
-
-
---- File: C:\Users\ananth\dnd-kit\dirMapper\go.mod ---
+        └── gg.go
+</Project_Structure>
+</File_Contents>
+<go.mod>
 module github.com/ananth-ar/dirMapper
 
 go 1.23.3
 
-
---- File: C:\Users\ananth\dnd-kit\dirMapper\hr\h.txt ---
+</go.mod>
+<gggf.txt>
+00000000000000000000000000000000000
+</gggf.txt>
+<samp.go>
+package temp
+</samp.go>
+<h.txt>
 gfghghjgjh
+</h.txt>
+<gg.go>
+package temp
+</gg.go>
+
+</File_Contents>

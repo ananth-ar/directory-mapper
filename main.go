@@ -441,13 +441,14 @@ func printTree(node *TreeNode, prefix string, isLast bool, output *os.File) {
 	}
 }
 
-func writeFileContents(node *TreeNode, currentPath string, output *os.File, filterMatcher *PatternList) error {
+func writeFileContents(node *TreeNode, currentPath string, output *os.File) error {
+
 	fullPath := filepath.Join(currentPath, node.name)
 	
 	if !node.isDir {
-		if filterMatcher != nil && !filterMatcher.Matches(fullPath) {
-			return nil
-		}
+		// if filterMatcher != nil && !filterMatcher.Matches(fullPath) {
+		// 	return nil
+		// }
 
 		_, err := os.Stat(fullPath)
 		if err != nil {
@@ -463,12 +464,13 @@ func writeFileContents(node *TreeNode, currentPath string, output *os.File, filt
 			return nil
 		}
 		
-		fmt.Fprintf(output, "\n\n--- File: %s ---\n", fullPath)
+		fmt.Fprintf(output, "<%s>\n", node.name)
 		fmt.Fprintf(output, "%s", string(content))
+		fmt.Fprintf(output, "\n</%s>\n", node.name)
 	}
 	
 	for _, child := range node.children {
-		err := writeFileContents(child, fullPath, output, filterMatcher)
+		err := writeFileContents(child, fullPath, output)
 		if err != nil {
 			return err
 		}
@@ -489,11 +491,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	filterMatcher, err := NewPatternList(".project_structure_filter", currentDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error initializing filter patterns: %v\n", err)
-		os.Exit(1)
-	}
+	// filterMatcher, err := NewPatternList(".project_structure_filter", currentDir)
+	// if err != nil {
+	// 	fmt.Fprintf(os.Stderr, "Error initializing filter patterns: %v\n", err)
+	// 	os.Exit(1)
+	// }
 
 	outputFile, err := os.Create("project_structure.txt")
 	if err != nil {
@@ -502,29 +504,28 @@ func main() {
 	}
 	defer outputFile.Close()
 
-	fmt.Fprintln(outputFile, "--- Project Structure ---")
-
 	root, err := createTree(currentDir, ignoreMatcher)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating tree structure: %v\n", err)
 		os.Exit(1)
 	}
-
+    fmt.Fprintln(outputFile, "<Project_Structure>")
 	printTree(root, "", true, outputFile)
-	
-	fmt.Fprintln(outputFile, "\n--- File Contents ---")
-	
+	fmt.Fprintln(outputFile, "</Project_Structure>")
+
+
 	// Only use filterMatcher if there are actual filter patterns
-	var activeFilterMatcher *PatternList
-	if len(filterMatcher.patterns) > 0 {
-		activeFilterMatcher = filterMatcher
-	}
-	
-	err = writeFileContents(root, filepath.Dir(currentDir), outputFile, activeFilterMatcher)
+	// var activeFilterMatcher *PatternList
+	// if len(filterMatcher.patterns) > 0 {
+	// 	activeFilterMatcher = filterMatcher
+	// }
+	fmt.Fprintln(outputFile, "</File_Contents>")
+	err = writeFileContents(root, filepath.Dir(currentDir), outputFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing file contents: %v\n", err)
 		os.Exit(1)
 	}
+	fmt.Fprintln(outputFile, "\n</File_Contents>")
 
 	fmt.Println("Project structure and file contents have been written to project_structure.txt")
 }
