@@ -8,20 +8,17 @@ import (
 	"strings"
 )
 
-// Pattern represents a single pattern with its properties
 type Pattern struct {
-	original  string   // Original pattern string
-	segments  []string // Pattern broken into path segments
-	isNegation bool   // Whether this is a negation pattern
-	isExact   bool    // Whether this is an exact match pattern
-	isDir     bool    // Whether this specifically matches directories
+    extension  string // For patterns like "*.log"
+    directory string // For patterns like "src/cmd/"
 }
 
-// PatternList represents an ordered list of patterns with matching logic
+// PatternList represents an ordered list of patterns
 type PatternList struct {
-	patterns []*Pattern
-	basePath string // Base path for relative pattern matching
+    patterns []Pattern
+    basePath string
 }
+
 
 // TreeNode represents a file or directory in the tree structure
 type TreeNode struct {
@@ -30,227 +27,91 @@ type TreeNode struct {
 	children []*TreeNode
 }
 
-func (p Pattern) String() string {
-    return fmt.Sprintf("{original:%s, isNegation:%v, isDir:%v}", p.original, p.isNegation, p.isDir)
-}
-
 // NewPatternList creates a new pattern list from a file
 func NewPatternList(filename, basePath string) (*PatternList, error) {
-	pl := &PatternList{
-		patterns: make([]*Pattern, 0),
-		basePath: basePath,
-	}
+    pl := &PatternList{
+        patterns: make([]Pattern, 0),
+        basePath: basePath,
+    }
 
-	// Create file if it doesn't exist
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		if err := os.WriteFile(filename, []byte{}, 0644); err != nil {
-			return nil, fmt.Errorf("error creating file %s: %v", filename, err)
-		}
-		return pl, nil
-	}
+    // Create file if it doesn't exist
+    if _, err := os.Stat(filename); os.IsNotExist(err) {
+        if err := os.WriteFile(filename, []byte{}, 0644); err != nil {
+            return nil, fmt.Errorf("error creating file %s: %v", filename, err)
+        }
+        return pl, nil
+    }
 
-	// Read patterns from file
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, fmt.Errorf("error opening file %s: %v", filename, err)
-	}
-	defer file.Close()
+    // Read patterns from file
+    file, err := os.Open(filename)
+    if err != nil {
+        return nil, fmt.Errorf("error opening file %s: %v", filename, err)
+    }
+    defer file.Close()
 
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		pattern := strings.TrimSpace(scanner.Text())
-		if pattern == "" || strings.HasPrefix(pattern, "#") {
-			continue
-		}
-		if err := pl.AddPattern(pattern); err != nil {
-			return nil, fmt.Errorf("error adding pattern %s: %v", pattern, err)
-		}
-	}
-    // fmt.Printf("%+v\n", pl.patterns) 
-	return pl, scanner.Err()
+    scanner := bufio.NewScanner(file)
+    for scanner.Scan() {
+        pattern := strings.TrimSpace(scanner.Text())
+        if pattern == "" || strings.HasPrefix(pattern, "#") {
+            continue
+        }
+        if err := pl.AddPattern(pattern); err != nil {
+            return nil, fmt.Errorf("error adding pattern %s: %v", pattern, err)
+        }
+    }
+
+    return pl, scanner.Err()
 }
 
 // AddPattern adds a new pattern to the list
 func (pl *PatternList) AddPattern(pattern string) error {
-	p := &Pattern{
-		original:   pattern,
-		isNegation: strings.HasPrefix(pattern, "!"),
-		isDir:      strings.HasSuffix(pattern, "/"),
-	}
+    p := Pattern{}
+    
+    // Handle file extension pattern (*.ext)
+    if strings.HasPrefix(pattern, "*.") {
+        p.extension = strings.TrimPrefix(pattern, "*")
+    } else {
+        // Handle directory pattern
+        p.directory = filepath.Clean(pattern)
+    }
 
-	// Handle negation
-	if p.isNegation {
-		pattern = pattern[1:]
-	}
-
-	// Handle directory suffix
-	if p.isDir {
-		pattern = pattern[:len(pattern)-1]
-	}
-
-	// Clean and split pattern
-	pattern = filepath.Clean(pattern)
-	// if filepath.IsAbs(pattern) {
-	// 	rel, err := filepath.Rel(pl.basePath, pattern)
-	// 	if err != nil {
-	// 		return fmt.Errorf("error converting absolute path to relative: %v", err)
-	// 	}
-	// 	pattern = rel
-	// }
-
-	// Convert pattern to segments
-	p.segments = splitPattern(pattern) // hr\fgf\**.txt => [hr fgf **.txt]
-	p.isExact = !strings.Contains(pattern, "*") || strings.Contains(pattern, "?")
-
-	pl.patterns = append(pl.patterns, p)
-	return nil
-}
-
-// splitPattern splits a pattern into segments handling wildcards
-func splitPattern(pattern string) []string {
-	// Special case for double asterisk
-	pattern = strings.ReplaceAll(pattern, "**", "\x00")
-	
-	// Split on path separator
-	segments := strings.Split(filepath.ToSlash(pattern), "/")
-	
-	// Restore double asterisks
-	for i, seg := range segments {
-		segments[i] = strings.ReplaceAll(seg, "\x00", "**")
-	}
-	
-	return segments
+    pl.patterns = append(pl.patterns, p)
+    return nil
 }
 
 // Matches checks if a path matches any pattern in the list
 func (pl *PatternList) Matches(path string) bool {
-	if len(pl.patterns) == 0 {
-		return false
-	}
+    if len(pl.patterns) == 0 {
+        return false
+    }
 
-	// Convert path to relative and clean
-	relPath := path
-	if filepath.IsAbs(path) {
-		var err error
-		relPath, err = filepath.Rel(pl.basePath, path)
-		if err != nil {
-			return false
-		}
-	}
-	relPath = filepath.ToSlash(filepath.Clean(relPath))
-    // now=> temp/gg.go
-	
-	// Get path info
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	isDir := info.IsDir()
+    // Convert path to relative and clean
+    relPath := path
+    if filepath.IsAbs(path) {
+        var err error
+        relPath, err = filepath.Rel(pl.basePath, path)
+        if err != nil {
+            return false
+        }
+    }
+    relPath = filepath.Clean(relPath)
 
-	// Check each pattern in order
-	result := false
-	for _, p := range pl.patterns { 
-		if p.matches(relPath, isDir) {// to be changed
-			result = !p.isNegation
-		}
-	}
-	return result
-}
+    // Check each pattern
+    for _, p := range pl.patterns {
+        // Check file extension pattern
+        if p.extension != "" && strings.HasSuffix(relPath, p.extension) {
+            return true
+        }
 
-// matches checks if a path matches a single pattern
-func (p *Pattern) matches(path string, isDir bool) bool {
-	// Directory-specific patterns only match directories
-	if p.isDir && !isDir {
-		return false
-	}
+        // Check directory pattern
+        if p.directory != "" {
+            if strings.HasPrefix(relPath, p.directory) {
+                return true
+            }
+        }
+    }
 
-	// Split path into segments
-	pathSegments := strings.Split(path, "/")
-
-	// For exact matches, compare directly
-	if p.isExact {
-		return strings.Join(p.segments, "/") == path
-	}
-
-	return p.matchSegments(p.segments, pathSegments)
-}
-
-// matchSegments performs recursive segment matching
-func (p *Pattern) matchSegments(patternSegs, pathSegs []string) bool {
-	// Base cases
-	if len(patternSegs) == 0 {
-		return len(pathSegs) == 0
-	}
-	if len(pathSegs) == 0 {
-		// Remaining pattern segments must all be "**"
-		for _, seg := range patternSegs {
-			if seg != "**" {
-				return false
-			}
-		}
-		return true
-	}
-
-	// Current segments to match
-	patSeg := patternSegs[0]
-	pathSeg := pathSegs[0]
-
-	// Handle double asterisk
-	if patSeg == "**" {
-		// Try matching with and without consuming path segment
-		return p.matchSegments(patternSegs[1:], pathSegs) ||
-			p.matchSegments(patternSegs, pathSegs[1:])
-	}
-
-	// Handle single asterisk and question mark
-	if matchWildcard(patSeg, pathSeg) {
-		return p.matchSegments(patternSegs[1:], pathSegs[1:])
-	}
-
-	return false
-}
-
-// matchWildcard matches a single pattern segment against a path segment
-func matchWildcard(pattern, path string) bool {
-	// Convert pattern to regex
-	regex := strings.Builder{}
-	regex.WriteString("^")
-	
-	for i := 0; i < len(pattern); i++ {
-		switch pattern[i] {
-		case '*':
-			regex.WriteString(".*")
-		case '?':
-			regex.WriteString(".")
-		default:
-			// Escape regex special characters
-			if strings.ContainsRune("[](){}+^$|\\.", rune(pattern[i])) {
-				regex.WriteRune('\\')
-			}
-			regex.WriteByte(pattern[i])
-		}
-	}
-	
-	regex.WriteString("$")
-	
-	// Use strings.Contains for simple cases
-	if pattern == "*" {
-		return true
-	}
-	
-	// Use prefix/suffix for simple wildcards
-	if strings.HasPrefix(pattern, "*") && strings.HasSuffix(pattern, "*") {
-		middle := pattern[1:len(pattern)-1]
-		return strings.Contains(path, middle)
-	}
-	if strings.HasPrefix(pattern, "*") {
-		return strings.HasSuffix(path, pattern[1:])
-	}
-	if strings.HasSuffix(pattern, "*") {
-		return strings.HasPrefix(path, pattern[:len(pattern)-1])
-	}
-	
-	return pattern == path
+    return false
 }
 
 // Common file patterns and directories to skip
@@ -491,12 +352,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// filterMatcher, err := NewPatternList(".project_structure_filter", currentDir)
-	// if err != nil {
-	// 	fmt.Fprintf(os.Stderr, "Error initializing filter patterns: %v\n", err)
-	// 	os.Exit(1)
-	// }
-
 	outputFile, err := os.Create("project_structure.txt")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating output file: %v\n", err)
@@ -514,11 +369,6 @@ func main() {
 	fmt.Fprintln(outputFile, "</Project_Structure>")
 
 
-	// Only use filterMatcher if there are actual filter patterns
-	// var activeFilterMatcher *PatternList
-	// if len(filterMatcher.patterns) > 0 {
-	// 	activeFilterMatcher = filterMatcher
-	// }
 	fmt.Fprintln(outputFile, "</File_Contents>")
 	err = writeFileContents(root, filepath.Dir(currentDir), outputFile)
 	if err != nil {
