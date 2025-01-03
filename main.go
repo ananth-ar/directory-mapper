@@ -11,8 +11,7 @@ import (
 // Pattern represents a single pattern with its properties
 type Pattern struct {
 	original  string   // Original pattern string
-	segments  []string // Pattern broken into path segments
-	isNegation bool   // Whether this is a negation pattern
+	segments  []string // Pattern broken into path segments  
 	isExact   bool    // Whether this is an exact match pattern
 	isDir     bool    // Whether this specifically matches directories
 }
@@ -31,7 +30,7 @@ type TreeNode struct {
 }
 
 func (p Pattern) String() string {
-    return fmt.Sprintf("{original:%s, isNegation:%v, isDir:%v}", p.original, p.isNegation, p.isDir)
+    return fmt.Sprintf("{original:%s,  isDir:%v}", p.original,  p.isDir)
 }
 
 // NewPatternList creates a new pattern list from a file
@@ -74,13 +73,7 @@ func NewPatternList(filename, basePath string) (*PatternList, error) {
 func (pl *PatternList) AddPattern(pattern string) error {
 	p := &Pattern{
 		original:   pattern,
-		isNegation: strings.HasPrefix(pattern, "!"),
 		isDir:      strings.HasSuffix(pattern, "/"),
-	}
-
-	// Handle negation
-	if p.isNegation {
-		pattern = pattern[1:]
 	}
 
 	// Handle directory suffix
@@ -150,8 +143,8 @@ func (pl *PatternList) Matches(path string) bool {
 	// Check each pattern in order
 	result := false
 	for _, p := range pl.patterns { 
-		if p.matches(relPath, isDir) {// to be changed
-			result = !p.isNegation
+		if p.matches(relPath, isDir) {
+			result = true
 		}
 	}
 	return result
