@@ -375,8 +375,9 @@ func writeFileContents(node *TreeNode, currentPath string, output *os.File) erro
             return nil
         }
         
-        fmt.Fprintf(output, "\n--- File: %s ---\n", node.name)
+        fmt.Fprintf(output, "<%s>\n", node.name)
         fmt.Fprintf(output, "%s\n", string(content))
+        fmt.Fprintf(output, "\n</%s>\n", node.name)
     }
     
     for _, child := range node.children {
@@ -426,9 +427,10 @@ func main() {
         os.Exit(1)
     }
 
-    fmt.Fprintln(outputFile, "--- Folder Structure ---")
+   fmt.Fprintln(outputFile, "<Project_Structure>")
     printTree(root, "", true, outputFile)
-    fmt.Fprintln(outputFile, "\n--- File Contents ---")
+	fmt.Fprintln(outputFile, "</Project_Structure>")
+
     err = writeFileContents(root, filepath.Dir(currentDir), outputFile)
     if err != nil {
         fmt.Fprintf(os.Stderr, "Error writing file contents: %v\n", err)
