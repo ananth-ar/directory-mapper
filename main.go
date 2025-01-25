@@ -9,17 +9,16 @@ import (
 )
 
 type Pattern struct {
-    extension  string // For patterns like "*.log"
-    directory string // For patterns like "src/cmd/"
+	extension string // For patterns like "*.log"
+	directory string // For patterns like "src/cmd/"
 }
 
 // PatternList represents an ordered list of patterns
 type PatternList struct {
-    patterns []Pattern
-    basePath string
+	patterns  []Pattern
+	basePath  string
 	matchType PatternType
 }
-
 
 // TreeNode represents a file or directory in the tree structure
 type TreeNode struct {
@@ -32,117 +31,115 @@ type TreeNode struct {
 type PatternType int
 
 const (
-    Ignore PatternType = iota
-    Filter
+	Ignore PatternType = iota
+	Filter
 )
 
 // determinePatternType checks which pattern file exists and should be used
 func determinePatternType(ignoreFile, filterFile string) (string, PatternType, error) {
-    ignoreExists := false
-    filterExists := false
+	ignoreExists := false
+	filterExists := false
 
-    if _, err := os.Stat(ignoreFile); err == nil {
-        ignoreExists = true
-    }
-    if _, err := os.Stat(filterFile); err == nil {
-        filterExists = true
-    }
+	if _, err := os.Stat(ignoreFile); err == nil {
+		ignoreExists = true
+	}
+	if _, err := os.Stat(filterFile); err == nil {
+		filterExists = true
+	}
 
-    // If both exist, use ignore file
-    if ignoreExists {
-        return ignoreFile, Ignore, nil
-    }
-    // If only filter exists, use filter file
-    if filterExists {
-        return filterFile, Filter, nil
-    }
-    // If neither exists, create and use ignore file
-    if err := os.WriteFile(ignoreFile, []byte{}, 0644); err != nil {
-        return "", Ignore, fmt.Errorf("error creating ignore file: %v", err)
-    }
-    return ignoreFile, Ignore, nil
+	// If both exist, use ignore file
+	if ignoreExists {
+		return ignoreFile, Ignore, nil
+	}
+	// If only filter exists, use filter file
+	if filterExists {
+		return filterFile, Filter, nil
+	}
+	// If neither exists, create and use ignore file
+	if err := os.WriteFile(ignoreFile, []byte{}, 0644); err != nil {
+		return "", Ignore, fmt.Errorf("error creating ignore file: %v", err)
+	}
+	return ignoreFile, Ignore, nil
 }
-
 
 // NewPatternList creates a new pattern list from a file
 func NewPatternList(filename string, basePath string, matchType PatternType) (*PatternList, error) {
-    pl := &PatternList{
-        patterns:  make([]Pattern, 0),
-        basePath:  basePath,
-        matchType: matchType,
-    }
+	pl := &PatternList{
+		patterns:  make([]Pattern, 0),
+		basePath:  basePath,
+		matchType: matchType,
+	}
 
-    file, err := os.Open(filename)
-    if err != nil {
-        return nil, fmt.Errorf("error opening file %s: %v", filename, err)
-    }
-    defer file.Close()
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("error opening file %s: %v", filename, err)
+	}
+	defer file.Close()
 
-    scanner := bufio.NewScanner(file)
-    for scanner.Scan() {
-        pattern := strings.TrimSpace(scanner.Text())
-        if pattern == "" || strings.HasPrefix(pattern, "#") {
-            continue
-        }
-        if err := pl.AddPattern(pattern); err != nil {
-            return nil, fmt.Errorf("error adding pattern %s: %v", pattern, err)
-        }
-    }
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		pattern := strings.TrimSpace(scanner.Text())
+		if pattern == "" || strings.HasPrefix(pattern, "#") {
+			continue
+		}
+		if err := pl.AddPattern(pattern); err != nil {
+			return nil, fmt.Errorf("error adding pattern %s: %v", pattern, err)
+		}
+	}
 
-    return pl, scanner.Err()
+	return pl, scanner.Err()
 }
 
 // AddPattern adds a new pattern to the list
 func (pl *PatternList) AddPattern(pattern string) error {
-    p := Pattern{}
-    
-    // Handle file extension pattern (*.ext)
-    if strings.HasPrefix(pattern, "*.") {
-        p.extension = strings.TrimPrefix(pattern, "*")
-    } else {
-        // Handle directory pattern
-        p.directory = filepath.Clean(pattern)
-    }
+	p := Pattern{}
 
-    pl.patterns = append(pl.patterns, p)
-    return nil
+	// Handle file extension pattern (*.ext)
+	if strings.HasPrefix(pattern, "*.") {
+		p.extension = strings.TrimPrefix(pattern, "*")
+	} else {
+		// Handle directory pattern
+		p.directory = filepath.Clean(pattern)
+	}
+
+	pl.patterns = append(pl.patterns, p)
+	return nil
 }
 
 // Matches checks if a path matches any pattern in the list
 func (pl *PatternList) Matches(path string) bool {
-    if len(pl.patterns) == 0 {
-        return pl.matchType == Filter // If no patterns and Filter mode, nothing matches
-    }
+	if len(pl.patterns) == 0 {
+		return pl.matchType == Filter // If no patterns and Filter mode, nothing matches
+	}
 
-    // Convert path to relative and clean
-    relPath := path
-    if filepath.IsAbs(path) {
-        var err error
-        relPath, err = filepath.Rel(pl.basePath, path)
-        if err != nil {
-            return false
-        }
-    }
-    relPath = filepath.Clean(relPath)
+	// Convert path to relative and clean
+	relPath := path
+	if filepath.IsAbs(path) {
+		var err error
+		relPath, err = filepath.Rel(pl.basePath, path)
+		if err != nil {
+			return false
+		}
+	}
+	relPath = filepath.Clean(relPath)
 
-    // Check each pattern
-    for _, p := range pl.patterns {
-        // Check file extension pattern
-        if p.extension != "" && strings.HasSuffix(relPath, p.extension) {
-            return true
-        }
+	// Check each pattern
+	for _, p := range pl.patterns {
+		// Check file extension pattern
+		if p.extension != "" && strings.HasSuffix(relPath, p.extension) {
+			return true
+		}
 
-        // Check directory pattern
-        if p.directory != "" {
-            if strings.HasPrefix(relPath, p.directory) {
-                return true
-            }
-        }
-    }
+		// Check directory pattern
+		if p.directory != "" {
+			if strings.HasPrefix(relPath, p.directory) {
+				return true
+			}
+		}
+	}
 
-    return false
+	return false
 }
-
 
 // Common file patterns and directories to skip
 var (
@@ -193,80 +190,66 @@ var (
 	}
 
 	skipFiles = map[string]bool{
-		"project_structure.txt":           true,
-		".project_structure_ignore":       true,
-		".project_structure_filter":       true,
-		".DS_Store":                      true,
-		"Thumbs.db":                      true,
-		".gitignore":                     true,
-		".env":                           true,
-		".env.local":                     true,
-		"desktop.ini":                    true,
+		"project_structure.txt":     true,
+		".project_structure_ignore": true,
+		".project_structure_filter": true,
+		".DS_Store":                 true,
+		"Thumbs.db":                 true,
+		".gitignore":                true,
+		".env":                      true,
+		".env.local":                true,
+		"desktop.ini":               true,
 	}
 
 	maxFileSize = int64(50 * 1024 * 1024)
 )
 
-
 func shouldSkipFile(entry os.DirEntry, fullPath string, patterns *PatternList) (bool, error) {
-    fmt.Printf("Checking file: %s\n", fullPath)
 
-    info, err := entry.Info()
-    if err != nil {
-        return false, fmt.Errorf("error getting file info: %v", err)
-    }
+	info, err := entry.Info()
+	if err != nil {
+		return false, fmt.Errorf("error getting file info: %v", err)
+	}
 
-    fmt.Printf("File info - Name: %s, IsDir: %t, Size: %d bytes\n", entry.Name(), info.IsDir(), info.Size())
+	if patterns != nil {
+		matches := patterns.Matches(fullPath)
 
-    if patterns != nil {
-        matches := patterns.Matches(fullPath)
-        fmt.Printf("Patterns are defined. Matches found: %t\n", matches)
+		if patterns.matchType == Ignore {
+			if matches {
+				return true, nil
+			}
+		} else {
+			if !matches {
+				return true, nil
+			}
+		}
+	}
 
-        if patterns.matchType == Ignore {
-            if matches {
-                fmt.Println("Ignoring file due to ignore pattern match.")
-                return true, nil
-            }
-        } else {
-            if !matches {
-                fmt.Println("Ignoring file due to filter pattern non-match.")
-                return true, nil
-            }
-        }
-    } else {
-        fmt.Println("No patterns defined, proceeding with other checks.")
-    }
+	if skipFiles[entry.Name()] {
+		return true, nil
+	}
 
-    if skipFiles[entry.Name()] {
-        fmt.Printf("Skipping file due to filename: %s\n", entry.Name())
-        return true, nil
-    }
+	if info.IsDir() && skipDirs[entry.Name()] {
+		return true, nil
+	}
 
-    if info.IsDir() && skipDirs[entry.Name()] {
-        fmt.Printf("Skipping directory due to name: %s\n", entry.Name())
-        return true, nil
-    }
+	if !info.IsDir() {
+		ext := strings.ToLower(filepath.Ext(entry.Name()))
+		if skipExtensions[ext] {
+			return true, nil
+		}
 
-    if !info.IsDir() {
-        ext := strings.ToLower(filepath.Ext(entry.Name()))
-        if skipExtensions[ext] {
-            fmt.Printf("Skipping file due to extension: %s\n", ext)
-            return true, nil
-        }
+		if info.Size() > maxFileSize {
+			return true, nil
+		}
 
-        if info.Size() > maxFileSize {
-            fmt.Printf("Skipping file due to size: %d bytes (max allowed: %d bytes)\n", info.Size(), maxFileSize)
-            return true, nil
-        }
+		if err := checkReadPermission(fullPath); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Cannot read file %s: %v\n", fullPath, err)
+			return true, nil
+		}
+	}
 
-        if err := checkReadPermission(fullPath); err != nil {
-            fmt.Fprintf(os.Stderr, "Warning: Cannot read file %s: %v\n", fullPath, err)
-            return true, nil
-        }
-    }
-
-    fmt.Println("File will not be skipped.")
-    return false, nil
+	return false, nil
 }
 
 func checkReadPermission(path string) error {
@@ -301,7 +284,7 @@ func createTree(root string, ignoreMatcher *PatternList) (*TreeNode, error) {
 
 	for _, entry := range entries {
 		childPath := filepath.Join(root, entry.Name())
-		
+
 		skip, err := shouldSkipFile(entry, childPath, ignoreMatcher)
 		if err != nil {
 			return nil, fmt.Errorf("error checking file %s: %v", childPath, err)
@@ -357,90 +340,88 @@ func printTree(node *TreeNode, prefix string, isLast bool, output *os.File) {
 	}
 }
 
-
 func writeFileContents(node *TreeNode, currentPath string, output *os.File) error {
-    fullPath := filepath.Join(currentPath, node.name)
-    
-    if !node.isDir {
-        _, err := os.Stat(fullPath)
-        if err != nil {
-            if os.IsNotExist(err) {
-                return nil
-            }
-            return fmt.Errorf("error checking file %s: %v", fullPath, err)
-        }
+	fullPath := filepath.Join(currentPath, node.name)
 
-        content, err := os.ReadFile(fullPath)
-        if err != nil {
-            fmt.Fprintf(os.Stderr, "Warning: Could not read file %s: %v\n", fullPath, err)
-            return nil
-        }
-        
-        fmt.Fprintf(output, "<%s>\n", node.name)
-        fmt.Fprintf(output, "%s\n", string(content))
-        fmt.Fprintf(output, "\n</%s>\n", node.name)
-    }
-    
-    for _, child := range node.children {
-        if err := writeFileContents(child, fullPath, output); err != nil {
-            return err
-        }
-    }
-    
-    return nil
+	if !node.isDir {
+		_, err := os.Stat(fullPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return fmt.Errorf("error checking file %s: %v", fullPath, err)
+		}
+
+		content, err := os.ReadFile(fullPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Could not read file %s: %v\n", fullPath, err)
+			return nil
+		}
+
+		fmt.Fprintf(output, "<%s>\n", node.name)
+		fmt.Fprintf(output, "%s\n", string(content))
+		fmt.Fprintf(output, "\n</%s>\n", node.name)
+	}
+
+	for _, child := range node.children {
+		if err := writeFileContents(child, fullPath, output); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
-
 func main() {
-    currentDir, err := os.Getwd()
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "Error getting current directory: %v\n", err)
-        os.Exit(1)
-    }
+	currentDir, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting current directory: %v\n", err)
+		os.Exit(1)
+	}
 
-    ignoreFile := filepath.Join(currentDir, ".project_structure_ignore")
-    filterFile := filepath.Join(currentDir, ".project_structure_filter")
+	ignoreFile := filepath.Join(currentDir, ".project_structure_ignore")
+	filterFile := filepath.Join(currentDir, ".project_structure_filter")
 
-    // Determine which pattern file to use
-    patternFile, patternType, err := determinePatternType(ignoreFile, filterFile)
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "Error determining pattern type: %v\n", err)
-        os.Exit(1)
-    }
+	// Determine which pattern file to use
+	patternFile, patternType, err := determinePatternType(ignoreFile, filterFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error determining pattern type: %v\n", err)
+		os.Exit(1)
+	}
 
-    // Initialize pattern matcher
-    patterns, err := NewPatternList(patternFile, currentDir, patternType)
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "Error initializing patterns: %v\n", err)
-        os.Exit(1)
-    }
+	// Initialize pattern matcher
+	patterns, err := NewPatternList(patternFile, currentDir, patternType)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing patterns: %v\n", err)
+		os.Exit(1)
+	}
 
-    outputFile, err := os.Create("project_structure.txt")
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "Error creating output file: %v\n", err)
-        os.Exit(1)
-    }
-    defer outputFile.Close()
+	outputFile, err := os.Create("project_structure.txt")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating output file: %v\n", err)
+		os.Exit(1)
+	}
+	defer outputFile.Close()
 
-    root, err := createTree(currentDir, patterns)
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "Error creating tree structure: %v\n", err)
-        os.Exit(1)
-    }
+	root, err := createTree(currentDir, patterns)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating tree structure: %v\n", err)
+		os.Exit(1)
+	}
 
-    fmt.Fprintln(outputFile, "<Project_Structure>")
-    printTree(root, "", true, outputFile)
+	fmt.Fprintln(outputFile, "<Project_Structure>")
+	printTree(root, "", true, outputFile)
 	fmt.Fprintln(outputFile, "</Project_Structure>")
 
-    err = writeFileContents(root, filepath.Dir(currentDir), outputFile)
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "Error writing file contents: %v\n", err)
-        os.Exit(1)
-    }
+	err = writeFileContents(root, filepath.Dir(currentDir), outputFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing file contents: %v\n", err)
+		os.Exit(1)
+	}
 
-    patternTypeStr := "ignore"
-    if patternType == Filter {
-        patternTypeStr = "filter"
-    }
-    fmt.Printf("Project structure and file contents have been written to project_structure.txt using %s patterns\n", patternTypeStr)
+	patternTypeStr := "ignore"
+	if patternType == Filter {
+		patternTypeStr = "filter"
+	}
+	fmt.Printf("Project structure and file contents have been written to project_structure.txt using %s patterns\n", patternTypeStr)
 }

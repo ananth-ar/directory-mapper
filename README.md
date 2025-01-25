@@ -43,11 +43,8 @@ Create a `.project_structure_ignore` file in your project root to specify patter
 ```
 # Ignore specific files or directories
 node_modules
-*.log
-dist/
+dist/temp/
 
-# Use ! to negate a pattern
-!important.log
 ```
 
 ## Default Exclusions
